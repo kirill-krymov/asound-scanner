@@ -16,6 +16,7 @@ export async function encryptAttendance(data,key){
 }
 export function evaluate(manifest,ticket,previous,now){
   if(!manifest||now>manifest.expires_at)return {ok:false,reason:'expired'};
+  if(manifest.entry_open===false)return {ok:false,reason:'entry_closed'};
   if(now<manifest.created_at-300)return {ok:false,reason:'clock'};
   if(!ticket)return {ok:false,reason:'not_in_snapshot'};
   if(ticket.used||previous)return {ok:false,reason:'already_used',ticket,used_at:previous?.scanned_at||ticket.used_at};
