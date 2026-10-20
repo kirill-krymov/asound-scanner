@@ -1,6 +1,7 @@
 import {validQr,hashQr,decryptPacket,encryptAttendance,evaluate} from './offline-core.js';
 const element=id=>document.getElementById(id);
 let pack=null,key=null,manifest=null,scanner=null,busy=false,storage=null,cacheReady=false;
+let updating=false;
 const requestValue=request=>new Promise((resolve,reject)=>{request.onsuccess=()=>resolve(request.result);request.onerror=()=>reject(request.error);});
 const status=text=>{element('status').textContent=text;};
 
@@ -19,13 +20,15 @@ async function updateCard(){
   const rows=await journal();
   const now=Math.floor(Date.now()/1000);
   const valid=manifest&&now<=manifest.expires_at;
+  const entryReady=manifest?.entry_open!==false;
   element('connection').textContent=valid?'Список билетов загружен':'Срок списка истёк';
   element('count').textContent=manifest?`${manifest.tickets.length} билетов`:'';
   element('snapshot').textContent=manifest?`Обновлён: ${new Date(manifest.generated_at*1000).toLocaleString('ru-RU')}. Проходов на этом устройстве: ${rows.length}.`:'';
   element('readiness').textContent=valid?(cacheReady?'Готов к работе без интернета на этом телефоне.':'Список сохранён. Подготавливаем страницу для работы без интернета…'):'Нужен новый список от организатора. Журнал проходов сохранён.';
-  document.querySelector('.card').classList.toggle('ready',Boolean(valid&&cacheReady));
-  element('start').disabled=!valid;
-  element('submit').disabled=!valid;
+  if(valid&&!entryReady)element('readiness').textContent='Список загружен. Вход ещё закрыт. Дождитесь открытия входа и обновления списка через интернет.';
+  document.querySelector('.card').classList.toggle('ready',Boolean(valid&&cacheReady&&entryReady));
+  element('start').disabled=!valid||!entryReady;
+  element('submit').disabled=!valid||!entryReady;
   element('export').disabled=false;
   element('refresh').disabled=false;
 }
@@ -70,6 +73,7 @@ async function scan(value){
     if(result.ok){popup('✅ Пропустить',details+'\nВыдайте гостю браслет.','success');await updateCard();}
     else if(result.reason==='already_used'){const stamp=typeof result.used_at==='number'?new Date(result.used_at*1000).toLocaleString('ru-RU'):result.used_at;popup('⛔️ Уже использован',details+'\nПогашен: '+(stamp||'ранее'),'danger');}
     else if(result.reason==='not_in_snapshot')popup('⚠️ Нет в загруженном списке','Не пропускайте гостя без проверки у организатора. Возможно, билет куплен после обновления списка.');
+    else if(result.reason==='entry_closed')popup('⏳ Вход ещё закрыт','Дождитесь открытия входа организатором и обновите список при наличии интернета.');
     else if(result.reason==='clock')popup('⚠️ Проверьте время телефона','Включите автоматическую настройку даты и времени.');
     else popup('⚠️ Срок списка закончился','Обновите список через организатора.');
   }catch(error){popup('⚠️ Проверка не выполнена','Не удалось сохранить проход на телефоне. Не пропускайте гостя. '+(error.message||''));}
@@ -85,7 +89,17 @@ element('start').addEventListener('click',()=>{
 element('submit').addEventListener('click',()=>scan(element('qr').value));
 element('close').addEventListener('click',()=>{element('verdict').close();element('qr').value='';status('Готово к следующему билету.');});
 element('verdict').addEventListener('cancel',event=>{event.preventDefault();element('close').click();});
-element('refresh').addEventListener('click',async()=>{try{await loadManifest();status('Список обновлён. Журнал проходов сохранён.');}catch(error){status('Не удалось обновить: '+error.message+'. Продолжайте по сохранённому списку, если он актуален.');}});
+async function refreshList(manual=false){
+  if(updating||busy||!manifest||(!manual&&!navigator.onLine))return;
+  updating=true;
+  try{await loadManifest();if(manual)status('Список обновлён. Журнал проходов сохранён.');}
+  catch(error){if(manual)status('Не удалось обновить: '+error.message+'. Проверьте актуальность сохранённого списка у организатора.');}
+  finally{updating=false;}
+}
+element('refresh').addEventListener('click',()=>refreshList(true));
+window.addEventListener('online',()=>refreshList());
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)refreshList();});
+setInterval(()=>refreshList(),30000);
 element('export').addEventListener('click',async()=>{
   try{
     const operations=(await journal()).map(({request_id,ticket_id,qr_hash,scanned_at})=>({request_id,ticket_id,qr_hash,scanned_at}));
