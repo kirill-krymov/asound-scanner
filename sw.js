@@ -1,4 +1,4 @@
-const CACHE='asound-offline-v1';
+const CACHE='asound-offline-v2';
 const SHELL=['./index.html','./styles.css','./app.js','./offline-core.js','./manifest.webmanifest','./icon.svg','./vendor/html5-qrcode.min.js'];
 self.addEventListener('install',event=>{event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(SHELL)));});
 self.addEventListener('activate',event=>{event.waitUntil(self.clients.claim());});
