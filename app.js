@@ -69,7 +69,7 @@ async function scan(value){
     if(!validQr(qr)){popup('❌ Недействительный QR','Это не QR билета.','danger');return;}
     const result=await record(await hashQr(qr));
     const ticket=result.ticket;
-    const details=ticket?`${ticket.ticket_type==='vip'?'VIP столик':'Обычный билет'}\n${ticket.client_name}\nБилет: ${ticket.ticket_id.slice(0,8)}…`:'';
+    const details=ticket?`${ticket.ticket_label||(ticket.ticket_type==='vip'?'VIP билет':'Обычный билет')}\n${ticket.client_name}\nБилет: ${ticket.ticket_id.slice(0,8)}…`:'';
     if(result.ok){popup('✅ Пропустить',details+'\nВыдайте гостю браслет.','success');await updateCard();}
     else if(result.reason==='already_used'){const stamp=typeof result.used_at==='number'?new Date(result.used_at*1000).toLocaleString('ru-RU'):result.used_at;popup('⛔️ Уже использован',details+'\nПогашен: '+(stamp||'ранее'),'danger');}
     else if(result.reason==='not_in_snapshot')popup('⚠️ Нет в загруженном списке','Не пропускайте гостя без проверки у организатора. Возможно, билет куплен после обновления списка.');
